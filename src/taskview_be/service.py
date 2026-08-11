@@ -6,7 +6,7 @@ from .config import Settings
 from .materializer import create_evidence, preview_rows
 from .policy import calculate_utility, evaluate_policy
 from .schemas import DecisionRequest, PreviewRequest, RefineRequest, TaskViewResponse
-from .store import InMemoryTaskViewStore
+from .store import PostgresTaskViewStore
 
 
 class TaskViewNotFoundError(Exception):
@@ -18,7 +18,7 @@ class TaskViewConflictError(Exception):
 
 
 async def create_preview(
-    request: PreviewRequest, settings: Settings, repository: InMemoryTaskViewStore
+    request: PreviewRequest, settings: Settings, repository: PostgresTaskViewStore
 ) -> TaskViewResponse:
     plan = await request_plan(request, settings)
     findings = evaluate_policy(request, plan)
@@ -35,13 +35,13 @@ async def create_preview(
         preview_rows=preview_rows(),
         created_at=datetime.now(UTC),
     )
-    return repository.save(view)
+    return await repository.save(view)
 
 
-def decide(
-    view_id: str, decision: DecisionRequest, repository: InMemoryTaskViewStore
+async def decide(
+    view_id: str, decision: DecisionRequest, repository: PostgresTaskViewStore
 ) -> TaskViewResponse:
-    view = repository.get(view_id)
+    view = await repository.get(view_id)
     if not view:
         raise TaskViewNotFoundError(view_id)
     if decision.approved and any(item.severity == "block" for item in view.policy_findings):
@@ -51,16 +51,16 @@ def decide(
     view.reviewed_by = decision.reviewer
     view.review_reason = decision.reason
     view.evidence = create_evidence(view, decision.reviewer) if decision.approved else None
-    return repository.save(view)
+    return await repository.save(view)
 
 
 async def refine(
     view_id: str,
     refine_request: RefineRequest,
     settings: Settings,
-    repository: InMemoryTaskViewStore,
+    repository: PostgresTaskViewStore,
 ) -> TaskViewResponse:
-    current = repository.get(view_id)
+    current = await repository.get(view_id)
     if not current:
         raise TaskViewNotFoundError(view_id)
     request = PreviewRequest(
@@ -79,5 +79,4 @@ async def refine(
     current.reviewed_by = None
     current.review_reason = None
     current.evidence = None
-    return repository.save(current)
-
+    return await repository.save(current)

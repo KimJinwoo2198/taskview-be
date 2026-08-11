@@ -97,4 +97,4 @@ class TaskViewResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     ai_url: str
-
+    database: Literal["postgresql"] = "postgresql"

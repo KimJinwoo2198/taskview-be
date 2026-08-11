@@ -5,6 +5,7 @@ description = "Policy, approval and evidence API for TaskView"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "asyncpg>=0.31,<1",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "pydantic-settings>=2.10,<3",
