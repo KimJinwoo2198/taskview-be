@@ -1,4 +1,4 @@
-.PHONY: install db dev test lint
+.PHONY: install db dev test lint create-owner
 
 install:
 	uv sync
@@ -14,3 +14,6 @@ test: db
 
 lint:
 	uv run ruff check .
+
+create-owner:
+	uv run python scripts/create_user.py --email owner@taskview.dev --name "TaskView Owner" --role data_owner

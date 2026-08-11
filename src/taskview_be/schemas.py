@@ -56,7 +56,6 @@ class UtilityReport(BaseModel):
 
 class DecisionRequest(BaseModel):
     approved: bool
-    reviewer: str = Field(min_length=2, max_length=120)
     reason: str | None = Field(default=None, max_length=500)
 
 
@@ -89,6 +88,7 @@ class TaskViewResponse(BaseModel):
     utility: UtilityReport
     preview_rows: list[dict[str, str | int]]
     created_at: datetime
+    created_by: str | None = None
     reviewed_by: str | None = None
     review_reason: str | None = None
     evidence: EvidenceContract | None = None
@@ -98,3 +98,4 @@ class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     ai_url: str
     database: Literal["postgresql"] = "postgresql"
+    authentication: Literal["database-session"] = "database-session"

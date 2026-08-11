@@ -18,7 +18,10 @@ class TaskViewConflictError(Exception):
 
 
 async def create_preview(
-    request: PreviewRequest, settings: Settings, repository: PostgresTaskViewStore
+    request: PreviewRequest,
+    settings: Settings,
+    repository: PostgresTaskViewStore,
+    created_by: str,
 ) -> TaskViewResponse:
     plan = await request_plan(request, settings)
     findings = evaluate_policy(request, plan)
@@ -34,24 +37,33 @@ async def create_preview(
         utility=calculate_utility(plan),
         preview_rows=preview_rows(),
         created_at=datetime.now(UTC),
+        created_by=created_by,
     )
     return await repository.save(view)
 
 
 async def decide(
-    view_id: str, decision: DecisionRequest, repository: PostgresTaskViewStore
+    view_id: str,
+    decision: DecisionRequest,
+    reviewer: str,
+    repository: PostgresTaskViewStore,
 ) -> TaskViewResponse:
     view = await repository.get(view_id)
     if not view:
         raise TaskViewNotFoundError(view_id)
     if decision.approved and any(item.severity == "block" for item in view.policy_findings):
         raise TaskViewConflictError("차단된 정책 항목이 있어 승인할 수 없습니다.")
+    if view.status not in {"proposed", "blocked"}:
+        raise TaskViewConflictError("이미 검토가 완료된 Task View입니다.")
 
+    previous_status = view.status
     view.status = "approved" if decision.approved else "rejected"
-    view.reviewed_by = decision.reviewer
+    view.reviewed_by = reviewer
     view.review_reason = decision.reason
-    view.evidence = create_evidence(view, decision.reviewer) if decision.approved else None
-    return await repository.save(view)
+    view.evidence = create_evidence(view, reviewer) if decision.approved else None
+    if not await repository.save_if_status(view, expected_status=previous_status):
+        raise TaskViewConflictError("다른 사용자가 먼저 Task View 상태를 변경했습니다.")
+    return view
 
 
 async def refine(
@@ -63,6 +75,9 @@ async def refine(
     current = await repository.get(view_id)
     if not current:
         raise TaskViewNotFoundError(view_id)
+    if current.status == "approved":
+        raise TaskViewConflictError("승인된 Task View와 Evidence는 변경할 수 없습니다.")
+    previous_status = current.status
     request = PreviewRequest(
         purpose=f"{current.purpose}\n추가 요구: {refine_request.instruction}",
         audience=current.audience,
@@ -79,4 +94,6 @@ async def refine(
     current.reviewed_by = None
     current.review_reason = None
     current.evidence = None
-    return await repository.save(current)
+    if not await repository.save_if_status(current, expected_status=previous_status):
+        raise TaskViewConflictError("다른 사용자가 먼저 Task View 상태를 변경했습니다.")
+    return current
