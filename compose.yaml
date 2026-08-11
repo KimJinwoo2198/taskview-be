@@ -1,0 +1,30 @@
+services:
+  ai:
+    build:
+      context: ../taskview-ai
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:9b}
+    ports:
+      - "8100:8100"
+
+  be:
+    build:
+      context: .
+    environment:
+      TASKVIEW_AI_URL: http://ai:8100
+    depends_on:
+      - ai
+    ports:
+      - "8200:8200"
+
+  fe:
+    build:
+      context: ../taskview-fe
+    environment:
+      TASKVIEW_BE_URL: http://be:8200
+    depends_on:
+      - be
+    ports:
+      - "3000:3000"
+
