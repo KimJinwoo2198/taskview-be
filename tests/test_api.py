@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from taskview_be.config import get_settings
 from taskview_be.main import app
+from taskview_be.policy import evaluate_policy
+from taskview_be.schemas import PreviewRequest, PurposeSpec, TransformPlanItem, ViewPlan
 from taskview_be.store import store
 
 
@@ -42,6 +44,38 @@ def test_preview_approve_and_evidence(monkeypatch):
 def test_ttl_policy_blocks_approval(monkeypatch):
     monkeypatch.setenv("TASKVIEW_BE_FAKE_AI", "true")
     get_settings.cache_clear()
+
+
+def test_policy_blocks_hallucinated_catalog_fields():
+    request = PreviewRequest(
+        purpose="VOC를 지역별로 묶어 다음 스프린트의 개선 우선순위를 결정하고 싶다",
+        audience="product",
+        ttl_days=7,
+    )
+    plan = ViewPlan(
+        purpose_spec=PurposeSpec(
+            objective=request.purpose,
+            decision_to_support="우선순위 결정",
+            audience="product",
+            requested_fields=["invented_field"],
+        ),
+        selected_sources=["product"],
+        transformations=[
+            TransformPlanItem(
+                source="voc",
+                input_fields=["invented_field"],
+                output_field="invented_summary",
+                transformation="aggregate",
+                rationale="모델이 임의로 제안한 필드",
+            )
+        ],
+        preview_columns=["invented_preview"],
+    )
+
+    codes = {finding.code for finding in evaluate_policy(request, plan)}
+    assert "SOURCE_NOT_SELECTED" in codes
+    assert "UNKNOWN_CATALOG_FIELD" in codes
+    assert "UNKNOWN_PREVIEW_COLUMN" in codes
     store.clear()
     client = TestClient(app)
 
@@ -63,4 +97,3 @@ def test_ttl_policy_blocks_approval(monkeypatch):
     assert decision.status_code == 409
 
     get_settings.cache_clear()
-
