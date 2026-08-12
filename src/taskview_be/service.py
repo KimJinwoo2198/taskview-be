@@ -35,7 +35,7 @@ async def create_preview(
         plan=plan,
         policy_findings=findings,
         utility=calculate_utility(plan),
-        preview_rows=preview_rows(),
+        preview_rows=preview_rows(plan),
         created_at=datetime.now(UTC),
         created_by=created_by,
     )
@@ -81,15 +81,19 @@ async def refine(
     request = PreviewRequest(
         purpose=f"{current.purpose}\n추가 요구: {refine_request.instruction}",
         audience=current.audience,
-        ttl_days=current.ttl_days,
+        ttl_days=refine_request.ttl_days or current.ttl_days,
     )
     plan = await request_plan(request, settings)
     current.purpose = request.purpose
+    current.ttl_days = request.ttl_days
     current.plan = plan
     current.policy_findings = evaluate_policy(request, plan)
     current.utility = calculate_utility(plan)
+    current.preview_rows = preview_rows(plan)
     current.status = (
-        "blocked" if any(item.severity == "block" for item in current.policy_findings) else "proposed"
+        "blocked"
+        if any(item.severity == "block" for item in current.policy_findings)
+        else "proposed"
     )
     current.reviewed_by = None
     current.review_reason = None

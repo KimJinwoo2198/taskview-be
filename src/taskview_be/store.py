@@ -7,7 +7,7 @@ import asyncpg
 
 from .auth_schemas import Role, UserPublic
 from .config import get_settings
-from .schemas import TaskViewResponse
+from .schemas import RequesterSummary, TaskViewResponse
 
 CREATE_AUTH_TABLES = """
 CREATE TABLE IF NOT EXISTS users (
@@ -273,15 +273,13 @@ class PostgresTaskViewStore:
                 view.purpose,
                 view.audience,
                 view.ttl_days,
-                view.model_dump_json(),
+                self._payload_json(view),
                 view.created_at,
                 UUID(view.created_by) if view.created_by else None,
             )
         return view
 
-    async def save_if_status(
-        self, view: TaskViewResponse, *, expected_status: str
-    ) -> bool:
+    async def save_if_status(self, view: TaskViewResponse, *, expected_status: str) -> bool:
         """Atomically persist a state transition only when no competing update won."""
         pool = self._require_pool()
         async with pool.acquire() as connection:
@@ -303,7 +301,7 @@ class PostgresTaskViewStore:
                 view.purpose,
                 view.audience,
                 view.ttl_days,
-                view.model_dump_json(),
+                self._payload_json(view),
                 UUID(view.created_by) if view.created_by else None,
                 expected_status,
             )
@@ -312,14 +310,19 @@ class PostgresTaskViewStore:
     async def get(self, view_id: str) -> TaskViewResponse | None:
         pool = self._require_pool()
         async with pool.acquire() as connection:
-            payload = await connection.fetchval(
-                "SELECT payload FROM task_views WHERE id = $1",
+            row = await connection.fetchrow(
+                """
+                SELECT tv.payload, u.email AS requester_email,
+                       u.display_name AS requester_display_name
+                FROM task_views tv
+                LEFT JOIN users u ON u.id = tv.created_by
+                WHERE tv.id = $1
+                """,
                 view_id,
             )
-        if payload is None:
+        if row is None:
             return None
-        decoded = json.loads(payload) if isinstance(payload, str) else payload
-        return TaskViewResponse.model_validate(decoded)
+        return self._decode_view(row)
 
     async def list_views(
         self, *, created_by: str | None = None, limit: int = 50
@@ -329,9 +332,12 @@ class PostgresTaskViewStore:
             if created_by:
                 rows = await connection.fetch(
                     """
-                    SELECT payload FROM task_views
-                    WHERE created_by = $1
-                    ORDER BY created_at DESC
+                    SELECT tv.payload, u.email AS requester_email,
+                           u.display_name AS requester_display_name
+                    FROM task_views tv
+                    LEFT JOIN users u ON u.id = tv.created_by
+                    WHERE tv.created_by = $1
+                    ORDER BY tv.created_at DESC
                     LIMIT $2
                     """,
                     UUID(created_by),
@@ -339,17 +345,17 @@ class PostgresTaskViewStore:
                 )
             else:
                 rows = await connection.fetch(
-                    "SELECT payload FROM task_views ORDER BY created_at DESC LIMIT $1",
+                    """
+                    SELECT tv.payload, u.email AS requester_email,
+                           u.display_name AS requester_display_name
+                    FROM task_views tv
+                    LEFT JOIN users u ON u.id = tv.created_by
+                    ORDER BY tv.created_at DESC
+                    LIMIT $1
+                    """,
                     limit,
                 )
-        return [
-            TaskViewResponse.model_validate(
-                json.loads(row["payload"])
-                if isinstance(row["payload"], str)
-                else row["payload"]
-            )
-            for row in rows
-        ]
+        return [self._decode_view(row) for row in rows]
 
     async def clear(self) -> None:
         pool = self._require_pool()
@@ -370,6 +376,22 @@ class PostgresTaskViewStore:
             role=row["role"],
             created_at=row["created_at"],
         )
+
+    @staticmethod
+    def _payload_json(view: TaskViewResponse) -> str:
+        return view.model_copy(update={"requester": None}).model_dump_json()
+
+    @staticmethod
+    def _decode_view(row: asyncpg.Record) -> TaskViewResponse:
+        payload = row["payload"]
+        decoded = json.loads(payload) if isinstance(payload, str) else payload
+        view = TaskViewResponse.model_validate(decoded)
+        if row["requester_email"] and row["requester_display_name"]:
+            view.requester = RequesterSummary(
+                email=row["requester_email"],
+                display_name=row["requester_display_name"],
+            )
+        return view
 
 
 store = PostgresTaskViewStore(get_settings().taskview_database_url)

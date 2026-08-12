@@ -61,6 +61,12 @@ class DecisionRequest(BaseModel):
 
 class RefineRequest(BaseModel):
     instruction: str = Field(min_length=5, max_length=500)
+    ttl_days: int | None = Field(default=None, ge=1, le=30)
+
+
+class RequesterSummary(BaseModel):
+    display_name: str
+    email: str
 
 
 class EvidenceContract(BaseModel):
@@ -89,6 +95,7 @@ class TaskViewResponse(BaseModel):
     preview_rows: list[dict[str, str | int]]
     created_at: datetime
     created_by: str | None = None
+    requester: RequesterSummary | None = None
     reviewed_by: str | None = None
     review_reason: str | None = None
     evidence: EvidenceContract | None = None

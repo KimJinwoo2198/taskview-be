@@ -64,7 +64,7 @@ Compose는 형제 디렉터리의 `taskview-ai`, `taskview-fe`를 각각 빌드�
 - `POST /v1/taskviews/preview` — 목적을 계획·정책·미리보기로 컴파일
 - `POST /v1/taskviews/{id}/decision` — 데이터 소유자·관리자 승인/거절
 - `GET /v1/taskviews/{id}` — 현재 상태 조회
-- `POST /v1/taskviews/{id}/refine` — 목적 보완 후 재검토
+- `POST /v1/taskviews/{id}/refine` — 목적 보완 및 선택적 TTL 변경 후 재검토
 - `GET /v1/taskviews/{id}/evidence` — 승인된 View의 Evidence Contract
 
 ## 인증과 권한
@@ -74,6 +74,7 @@ Compose는 형제 디렉터리의 `taskview-ai`, `taskview-fe`를 각각 빌드�
 - 세션은 기본 7일 후 만료되고 로그아웃·갱신 시 즉시 폐기됩니다.
 - 5회 연속 로그인 실패 시 기본 15분 동안 계정을 잠급니다.
 - `requester`는 자신의 View만 볼 수 있고, `data_owner`와 `admin`만 승인할 수 있습니다.
+- 소유자·관리자 목록과 상세 응답에는 요청자 이름·이메일이 포함되어 동일 목적 요청도 구분할 수 있습니다.
 - API는 존재 여부 노출을 막기 위해 다른 사용자의 View를 `404`로 응답합니다.
 - 승인·보완 상태 전이는 조건부 갱신하며, 승인된 Evidence는 다시 수정할 수 없습니다.
 
