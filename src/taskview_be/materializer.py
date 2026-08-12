@@ -8,6 +8,7 @@ SAMPLE_ROWS = [
     {
         "week": "2026-W31",
         "region": "서울",
+        "age_band": "20대",
         "issue_type": "검색 정확도",
         "feature": "검색",
         "usage_count": 1280,
@@ -18,6 +19,7 @@ SAMPLE_ROWS = [
     {
         "week": "2026-W31",
         "region": "경기",
+        "age_band": "30대",
         "issue_type": "알림 지연",
         "feature": "알림",
         "usage_count": 930,
@@ -28,6 +30,7 @@ SAMPLE_ROWS = [
     {
         "week": "2026-W32",
         "region": "서울",
+        "age_band": "40대",
         "issue_type": "검색 정확도",
         "feature": "검색",
         "usage_count": 1140,
@@ -38,6 +41,7 @@ SAMPLE_ROWS = [
     {
         "week": "2026-W32",
         "region": "부산",
+        "age_band": "50대 이상",
         "issue_type": "온보딩",
         "feature": "온보딩",
         "usage_count": 620,
