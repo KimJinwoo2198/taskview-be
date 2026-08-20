@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: taskview
       POSTGRES_PASSWORD: taskview
     ports:
-      - "54329:5432"
+      - "127.0.0.1:54329:5432"
     volumes:
       - taskview_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,13 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:9b}
     ports:
-      - "8100:8100"
+      - "127.0.0.1:8100:8100"
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   be:
     build:
@@ -30,13 +36,29 @@ services:
     environment:
       TASKVIEW_AI_URL: http://ai:8100
       TASKVIEW_DATABASE_URL: postgresql://taskview:taskview@postgres:5432/taskview
+      TASKVIEW_EXPOSE_DEV_TOKENS: ${TASKVIEW_EXPOSE_DEV_TOKENS:-false}
+      TASKVIEW_DELIVERY_ENCRYPTION_KEY: ${TASKVIEW_DELIVERY_ENCRYPTION_KEY:-dGFza3ZpZXctbWFpbHBpdC1sb2NhbC1rZXktMDAwMDA=}
+      TASKVIEW_PUBLIC_WEB_URL: http://localhost:3000
+      TASKVIEW_SMTP_HOST: mailpit
+      TASKVIEW_SMTP_PORT: 1025
+      TASKVIEW_SMTP_FROM_EMAIL: Needex <no-reply@taskview.local>
+      TASKVIEW_MAIL_WORKER_ENABLED: "true"
+      # Local-only scanner policy. Production must use its exact DB hostname,
+      # network ranges, a trusted CA, and TLS verification.
+      TASKVIEW_DATA_SOURCE_ALLOWED_HOSTNAMES: postgres
+      TASKVIEW_DATA_SOURCE_ALLOWED_CIDRS: 172.16.0.0/12
+      TASKVIEW_DATA_SOURCE_REQUIRE_TLS: "false"
+      TASKVIEW_DATA_SOURCE_VERIFY_TLS: "false"
+      TASKVIEW_DATA_SOURCE_ENCRYPTION_KEY: ${TASKVIEW_DATA_SOURCE_ENCRYPTION_KEY:-VvoBr95OGEnxwNg9ITv1vAQPc4BvOiC94GUXuzo73bk=}
     depends_on:
       ai:
         condition: service_started
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     ports:
-      - "8200:8200"
+      - "127.0.0.1:8200:8200"
 
   fe:
     build:
@@ -46,7 +68,7 @@ services:
     depends_on:
       - be
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   taskview_postgres_data:

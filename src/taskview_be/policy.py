@@ -3,16 +3,86 @@ from .schemas import PolicyFinding, PreviewRequest, UtilityReport, ViewPlan
 REQUIRED_TRANSFORMS = {
     "user_id": "drop",
     "customer_name": "drop",
+    "name": "drop",
+    "phone": "drop",
+    "email": "drop",
     "ticket_id": "drop",
     "account_id": "mask",
     "address": "region_group",
+    "exact_address": "region_group",
     "age": "age_band",
+    "birth_date": "age_band",
+    "ticket_text": "classify",
+    "error_log": "classify",
+    "caller_id_number": "drop",
+    "incident_address": "drop",
+    "latitude": "drop",
+    "longitude": "drop",
+    "vin": "drop",
+    "summary": "drop",
 }
 
 CATALOG_FIELDS = {
-    "product": {"event_date", "feature", "account_id", "user_id", "usage_count"},
-    "operations": {"ticket_id", "created_at", "status", "assignee", "region", "resolution_hours"},
-    "voc": {"ticket_id", "created_at", "customer_name", "address", "age", "message", "issue_type"},
+    "product": {
+        "event_date",
+        "event_time",
+        "feature",
+        "account_id",
+        "user_id",
+        "usage_count",
+        "os_family",
+        "os_version",
+        "dropoff_step",
+        "error_log",
+        "ticket_created",
+        "state",
+        "issue_type",
+        "issue",
+        "method",
+        "caller_id_number",
+    },
+    "operations": {
+        "ticket_id",
+        "created_at",
+        "status",
+        "assignee",
+        "region",
+        "resolution_hours",
+        "exact_address",
+        "birth_date",
+        "created_date",
+        "borough",
+        "agency",
+        "complaint_type",
+        "incident_address",
+        "latitude",
+        "longitude",
+    },
+    "voc": {
+        "ticket_id",
+        "created_at",
+        "customer_name",
+        "name",
+        "phone",
+        "email",
+        "address",
+        "age",
+        "message",
+        "ticket_text",
+        "issue_type",
+        "date_complaint_filed",
+        "manufacturer",
+        "make",
+        "model",
+        "model_year",
+        "component",
+        "crash",
+        "fire",
+        "injuries",
+        "deaths",
+        "vin",
+        "summary",
+    },
 }
 
 
@@ -51,7 +121,11 @@ def evaluate_policy(request: PreviewRequest, plan: ViewPlan) -> list[PolicyFindi
                         action=f"변환을 {expected}로 변경하세요.",
                     )
                 )
-            if field == "message" and request.audience == "product" and item.transformation != "classify":
+            if (
+                field in {"message", "ticket_text"}
+                and request.audience == "product"
+                and item.transformation != "classify"
+            ):
                 findings.append(
                     PolicyFinding(
                         code="RAW_VOC_FOR_PRODUCT",

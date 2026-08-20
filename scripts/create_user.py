@@ -21,14 +21,16 @@ async def create_user(email: str, display_name: str, password: str, role: str) -
             role=role,
         )
     except asyncpg.UniqueViolationError as exc:
-        raise SystemExit("이미 가입된 이메일입니다. 기존 사용자의 역할은 직접 검토해 변경하세요.") from exc
+        raise SystemExit(
+            "이미 가입된 이메일입니다. 기존 사용자의 역할은 직접 검토해 변경하세요."
+        ) from exc
     finally:
         await store.stop()
     print(f"created {user.email} ({user.role})")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a privileged TaskView user")
+    parser = argparse.ArgumentParser(description="Create a privileged Needex user")
     parser.add_argument("--email", required=True)
     parser.add_argument("--name", required=True)
     parser.add_argument("--role", choices=["data_owner", "admin"], required=True)

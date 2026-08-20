@@ -16,4 +16,4 @@ lint:
 	uv run ruff check .
 
 create-owner:
-	uv run python scripts/create_user.py --email owner@taskview.dev --name "TaskView Owner" --role data_owner
+	uv run python scripts/create_user.py --email owner@taskview.dev --name "Needex Owner" --role data_owner

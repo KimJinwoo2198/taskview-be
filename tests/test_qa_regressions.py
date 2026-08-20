@@ -3,12 +3,14 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from taskview_be.config import get_settings
 from taskview_be.main import app
 
-TEST_PASSWORD = "TaskView-Test!2026"
+TEST_PASSWORD = "Needex-Test!2026"
+DELIVERY_KEY = Fernet.generate_key().decode()
 
 
 async def cleanup_test_rows() -> None:
@@ -47,6 +49,8 @@ def bearer(payload: dict) -> dict[str, str]:
 
 def test_owner_sees_requester_and_blocked_ttl_can_be_repaired(monkeypatch):
     monkeypatch.setenv("TASKVIEW_BE_FAKE_AI", "true")
+    monkeypatch.setenv("TASKVIEW_EXPOSE_DEV_TOKENS", "true")
+    monkeypatch.setenv("TASKVIEW_DELIVERY_ENCRYPTION_KEY", DELIVERY_KEY)
     get_settings.cache_clear()
     requester_email = unique_email("requester")
     owner_email = unique_email("owner")
@@ -61,7 +65,34 @@ def test_owner_sees_requester_and_blocked_ttl_can_be_repaired(monkeypatch):
             },
         )
         assert requester_signup.status_code == 201
+        assert (
+            client.post(
+                "/v1/auth/email-verifications/confirm",
+                json={"token": requester_signup.json()["verification_token"]},
+            ).status_code
+            == 200
+        )
         requester_headers = bearer(requester_signup.json())
+        workspace_created = client.post(
+            "/v1/workspaces",
+            headers=requester_headers,
+            json={
+                "name": "QA Regression Workspace",
+                "region": "KR-11",
+                "default_ttl_days": 7,
+                "member_role": "requester",
+            },
+        )
+        assert workspace_created.status_code == 201
+        workspace_id = workspace_created.json()["id"]
+        assert (
+            client.post(
+                f"/v1/workspaces/{workspace_id}/onboarding/complete",
+                headers=requester_headers,
+                json={"skipped_invitations": True},
+            ).status_code
+            == 200
+        )
 
         blocked = client.post(
             "/v1/taskviews/preview",
@@ -84,18 +115,33 @@ def test_owner_sees_requester_and_blocked_ttl_can_be_repaired(monkeypatch):
             },
         )
         assert owner_signup.status_code == 201
+        assert (
+            client.post(
+                "/v1/auth/email-verifications/confirm",
+                json={"token": owner_signup.json()["verification_token"]},
+            ).status_code
+            == 200
+        )
 
-        async def promote_owner() -> None:
+        async def grant_owner_membership() -> None:
             connection = await asyncpg.connect(get_settings().taskview_database_url)
             try:
                 await connection.execute(
-                    "UPDATE users SET role = 'data_owner' WHERE email = $1",
+                    """
+                    INSERT INTO workspace_memberships (workspace_id, user_id, role)
+                    SELECT $1::uuid, id, 'data_owner' FROM users WHERE email = $2
+                    """,
+                    workspace_id,
+                    owner_email,
+                )
+                await connection.execute(
+                    "UPDATE users SET onboarding_status = 'complete' WHERE email = $1",
                     owner_email,
                 )
             finally:
                 await connection.close()
 
-        asyncio.run(promote_owner())
+        asyncio.run(grant_owner_membership())
         owner_login = client.post(
             "/v1/auth/login",
             json={"email": owner_email, "password": TEST_PASSWORD},
