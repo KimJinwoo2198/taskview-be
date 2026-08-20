@@ -15,6 +15,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+    networks:
+      - needex
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["local-mail"]
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - needex
 
   be:
     build:
@@ -58,6 +74,13 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    networks:
+      - needex
 
 volumes:
   taskview_postgres_data:
+
+networks:
+  needex:
+    name: ${NEEDEX_NETWORK:-needex_internal}
+    external: true
