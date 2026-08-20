@@ -1039,11 +1039,10 @@ async def purpose_interpretation(
     request: PurposeInterpretationRequest, principal: BusinessPrincipal
 ) -> PurposeInterpretation:
     intent = None
-    if not get_settings().taskview_be_fake_ai:
-        try:
-            intent = await request_business_intent(request, get_settings())
-        except (httpx.HTTPError, ValueError):
-            pass
+    try:
+        intent = await request_business_intent(request, get_settings())
+    except (httpx.HTTPError, ValueError):
+        pass
     return interpret_purpose(request, principal.user, intent)
 
 
