@@ -127,49 +127,265 @@ def _fake_signup_plan(request: PreviewRequest) -> ViewPlan:
 def _fake_plan(request: PreviewRequest) -> ViewPlan:
     if _is_signup_diagnosis(request.purpose):
         return _fake_signup_plan(request)
+
+    source = _source_for_purpose(request.purpose, request.audience)
+    if source == "operations":
+        return ViewPlan(
+            purpose_spec=PurposeSpec(
+                objective=request.purpose,
+                decision_to_support="운영 인력 배치 우선순위를 정한다",
+                audience=request.audience,
+                requested_fields=[
+                    "created_date",
+                    "borough",
+                    "agency",
+                    "complaint_type",
+                    "resolution_hours",
+                    "incident_address",
+                    "latitude",
+                    "longitude",
+                ],
+            ),
+            selected_sources=["operations"],
+            transformations=[
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["created_date"],
+                    output_field="week",
+                    transformation="aggregate",
+                    rationale="민원 접수를 주 단위로 집계",
+                ),
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["borough"],
+                    output_field="region",
+                    transformation="region_group",
+                    rationale="상세 주소 없이 borough 수준만 유지",
+                ),
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["agency"],
+                    output_field="agency",
+                    transformation="select",
+                    rationale="담당 기관별 병목 비교",
+                ),
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["complaint_type"],
+                    output_field="complaint_type",
+                    transformation="select",
+                    rationale="민원 유형별 운영 수요 비교",
+                ),
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["resolution_hours"],
+                    output_field="avg_resolution_hours",
+                    transformation="aggregate",
+                    rationale="개별 민원이 아닌 평균 처리시간 제공",
+                ),
+                TransformPlanItem(
+                    source="operations",
+                    input_fields=["incident_address", "latitude", "longitude"],
+                    output_field="precise_location",
+                    transformation="drop",
+                    rationale="정확한 위치는 수집·출력하지 않음",
+                ),
+            ],
+            preview_columns=[
+                "week",
+                "region",
+                "agency",
+                "complaint_type",
+                "avg_resolution_hours",
+                "case_count",
+            ],
+            assumptions=[
+                f"View는 {request.ttl_days}일 뒤 만료된다",
+                "NYC 공식 공개 데이터에서 20건 이상 그룹만 제공한다",
+            ],
+        )
+    if source == "product":
+        return ViewPlan(
+            purpose_spec=PurposeSpec(
+                objective=request.purpose,
+                decision_to_support="소비자 불만 대응 우선순위를 정한다",
+                audience=request.audience,
+                requested_fields=[
+                    "ticket_created",
+                    "state",
+                    "issue_type",
+                    "method",
+                    "caller_id_number",
+                ],
+            ),
+            selected_sources=["product"],
+            transformations=[
+                TransformPlanItem(
+                    source="product",
+                    input_fields=["ticket_created"],
+                    output_field="week",
+                    transformation="aggregate",
+                    rationale="접수 시각을 주 단위로 집계",
+                ),
+                TransformPlanItem(
+                    source="product",
+                    input_fields=["state"],
+                    output_field="region",
+                    transformation="region_group",
+                    rationale="상세 위치 없이 주 수준만 유지",
+                ),
+                TransformPlanItem(
+                    source="product",
+                    input_fields=["issue_type"],
+                    output_field="issue_type",
+                    transformation="select",
+                    rationale="불만 유형별 개선 우선순위 비교",
+                ),
+                TransformPlanItem(
+                    source="product",
+                    input_fields=["method"],
+                    output_field="channel",
+                    transformation="select",
+                    rationale="접수 채널별 차이 비교",
+                ),
+                TransformPlanItem(
+                    source="product",
+                    input_fields=["caller_id_number"],
+                    output_field="caller_id_number",
+                    transformation="drop",
+                    rationale="전화번호는 수집·출력하지 않음",
+                ),
+            ],
+            preview_columns=["week", "region", "issue_type", "channel", "case_count"],
+            assumptions=[
+                f"View는 {request.ttl_days}일 뒤 만료된다",
+                "FCC 공식 공개 데이터에서 20건 이상 그룹만 제공한다",
+            ],
+        )
     return ViewPlan(
         purpose_spec=PurposeSpec(
             objective=request.purpose,
-            decision_to_support="다음 스프린트의 개선 우선순위를 정한다",
+            decision_to_support="차량 안전 조사 우선순위를 정한다",
             audience=request.audience,
-            requested_fields=["created_at", "address", "message", "ticket_id"],
+            requested_fields=[
+                "date_complaint_filed",
+                "manufacturer",
+                "model_year",
+                "component",
+                "crash",
+                "fire",
+                "vin",
+                "summary",
+            ],
         ),
         selected_sources=["voc"],
         transformations=[
             TransformPlanItem(
                 source="voc",
-                input_fields=["created_at"],
+                input_fields=["date_complaint_filed"],
                 output_field="week",
                 transformation="aggregate",
-                rationale="주간 추세 비교에 필요한 시간 단위만 유지",
+                rationale="접수일을 주 단위로 집계",
             ),
             TransformPlanItem(
                 source="voc",
-                input_fields=["address"],
-                output_field="region",
-                transformation="region_group",
-                rationale="정확한 주소를 노출하지 않고 지역 수준으로 축약",
+                input_fields=["manufacturer"],
+                output_field="manufacturer",
+                transformation="select",
+                rationale="제조사별 안전 신호 비교",
             ),
             TransformPlanItem(
                 source="voc",
-                input_fields=["message"],
-                output_field="issue_type",
-                transformation="classify",
-                rationale="VOC 원문 대신 업무에 필요한 이슈 유형만 제공",
+                input_fields=["model_year"],
+                output_field="model_year",
+                transformation="select",
+                rationale="연식별 위험 신호 비교",
             ),
             TransformPlanItem(
                 source="voc",
-                input_fields=["ticket_id"],
-                output_field="ticket_id",
+                input_fields=["component"],
+                output_field="component",
+                transformation="select",
+                rationale="부품군별 안전 이슈 비교",
+            ),
+            TransformPlanItem(
+                source="voc",
+                input_fields=["crash"],
+                output_field="crash_count",
+                transformation="aggregate",
+                rationale="사고 보고 건수를 집계",
+            ),
+            TransformPlanItem(
+                source="voc",
+                input_fields=["fire"],
+                output_field="fire_count",
+                transformation="aggregate",
+                rationale="화재 보고 건수를 집계",
+            ),
+            TransformPlanItem(
+                source="voc",
+                input_fields=["vin", "summary"],
+                output_field="raw_complaint",
                 transformation="drop",
-                rationale="제품 우선순위 판단에 직접 식별자는 불필요",
+                rationale="VIN과 원문은 수집·출력하지 않음",
             ),
         ],
-        preview_columns=["week", "region", "issue_type", "case_count"],
+        preview_columns=[
+            "manufacturer",
+            "model_year",
+            "component",
+            "crash_count",
+            "fire_count",
+            "case_count",
+        ],
         assumptions=[
             f"View는 {request.ttl_days}일 뒤 만료된다",
-            "집계 그룹은 20건 이상이어야 한다",
+            "NHTSA 공식 공개 데이터에서 20건 이상 그룹만 제공한다",
         ],
+    )
+
+
+def _source_for_purpose(purpose: str, audience: str) -> str:
+    normalized = purpose.casefold()
+    if any(keyword in normalized for keyword in ("311", "도시 운영", "처리 지연", "처리시간")):
+        return "operations"
+    if any(
+        keyword in normalized for keyword in ("nhtsa", "차량", "자동차", "안전", "사고", "화재")
+    ):
+        return "voc"
+    if any(keyword in normalized for keyword in ("fcc", "통신", "소비자 불만", "로보콜")):
+        return "product"
+    return {"operations": "operations", "support": "voc"}.get(audience, "product")
+
+
+def _fake_intent(request: PurposeInterpretationRequest) -> BusinessIntent:
+    source = _source_for_purpose(request.purpose, request.audience)
+    if source == "operations":
+        subject = "도시 민원 처리"
+        dimensions = ["지역", "담당 기관", "민원 유형"]
+        outcome = "운영 인력 배치 우선순위를 정한다"
+        region = "뉴욕시 전체"
+    elif source == "voc":
+        subject = "차량 안전 신고"
+        dimensions = ["제조사", "연식", "문제 부위"]
+        outcome = "안전 조사 우선순위를 정한다"
+        region = "미국 전체"
+    else:
+        subject = "소비자 불만"
+        dimensions = ["지역", "불만 유형", "접수 방법"]
+        outcome = "소비자 대응 우선순위를 정한다"
+        region = "미국 전체"
+    return BusinessIntent(
+        summary=request.purpose.strip(),
+        subject=subject,
+        comparison_dimensions=dimensions,
+        desired_outcome=outcome,
+        region_label=region,
+        department=request.audience,
+        selected_source=source,
+        confidence=0.72,
+        needs_clarification=False,
+        clarifying_question=None,
     )
 
 
@@ -190,6 +406,8 @@ async def request_plan(request: PreviewRequest, settings: Settings) -> ViewPlan:
 async def request_business_intent(
     request: PurposeInterpretationRequest, settings: Settings
 ) -> BusinessIntent:
+    if settings.taskview_be_fake_ai:
+        return _fake_intent(request)
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.post(
             f"{settings.taskview_ai_url.rstrip('/')}/v1/agent/interpret",

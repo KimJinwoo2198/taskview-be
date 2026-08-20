@@ -1,12 +1,38 @@
-from taskview_be.ai_client import _ai_headers
-from taskview_be.config import Settings
+from taskview_be.ai_client import _fake_intent, _fake_plan
+from taskview_be.experience_schemas import PurposeInterpretationRequest
+from taskview_be.schemas import PreviewRequest
 
 
-def test_ai_shared_secret_is_forwarded_as_bearer_token():
-    settings = Settings(taskview_ai_shared_secret="deployment-secret")
+def test_fake_plan_routes_nyc_purpose_to_public_operations_schema() -> None:
+    request = PreviewRequest(
+        purpose="최근 NYC 311 민원에서 담당 기관별 처리 지연을 찾아 인력을 배치하고 싶다",
+        audience="operations",
+    )
 
-    assert _ai_headers(settings) == {"authorization": "Bearer deployment-secret"}
+    plan = _fake_plan(request)
+
+    assert plan.selected_sources == ["operations"]
+    assert plan.preview_columns == [
+        "week",
+        "region",
+        "agency",
+        "complaint_type",
+        "avg_resolution_hours",
+        "case_count",
+    ]
 
 
-def test_ai_header_is_omitted_for_local_unprotected_mode():
-    assert _ai_headers(Settings(taskview_ai_shared_secret=None)) == {}
+def test_fake_intent_works_without_remote_ai() -> None:
+    request = PurposeInterpretationRequest(
+        purpose="최근 NHTSA 차량 안전 신고에서 제조사별 화재 신호를 찾고 싶다",
+        audience="support",
+        region="GLOBAL",
+        ttl_days=7,
+        output_mode="dashboard_api",
+    )
+
+    intent = _fake_intent(request)
+
+    assert intent.selected_source == "voc"
+    assert intent.subject == "차량 안전 신고"
+    assert intent.needs_clarification is False
